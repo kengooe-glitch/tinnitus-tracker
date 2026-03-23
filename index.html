@@ -56,7 +56,46 @@ header p { font-size: 0.8rem; opacity: 0.85; margin-top: 3px; }
   grid-template-columns: 360px 1fr;
   gap: 14px;
   padding: 14px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
+
+/* ===== Mobile: single-column panel toggle ===== */
+@media (max-width: 900px) {
+  .container {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 8px 8px 72px; /* bottom space for nav bar */
+  }
+  #left-panel { border-radius: 12px; }
+  .right-panel { border-radius: 12px; }
+  #left-panel.mob-hidden,
+  .right-panel.mob-hidden { display: none !important; }
+  .mobile-nav { display: flex !important; }
+}
+
+/* Mobile bottom nav bar */
+.mobile-nav {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: 60px;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.1);
+  z-index: 1000;
+}
+.mob-nav-btn {
+  flex: 1; border: none; background: transparent;
+  font-family: inherit; font-size: 0.78rem; font-weight: 600;
+  color: #a0aec0; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  transition: color 0.15s;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.mob-nav-btn.active { color: #3182ce; }
+.mob-nav-btn span.icon { font-size: 1.5rem; line-height: 1; }
+.mob-nav-btn span.label { font-size: 0.7rem; }
+
 
 .panel {
   background: white;
@@ -775,7 +814,7 @@ tr:hover td { background: #f7fafc; }
 <div class="container">
 
   <!-- ===== LEFT PANEL ===== -->
-  <div class="panel">
+  <div class="panel" id="left-panel">
 
     <div class="section-title">患者情報</div>
     <div class="patient-row">
@@ -1115,6 +1154,18 @@ tr:hover td { background: #f7fafc; }
   </div><!-- /.right-panel -->
 
 </div><!-- /.container -->
+
+<!-- Mobile bottom navigation -->
+<div class="mobile-nav" id="mobile-nav">
+  <button class="mob-nav-btn" id="mnav-left" onclick="showMobilePanel('left')">
+    <span class="icon">⚙️</span>
+    <span class="label">設定</span>
+  </button>
+  <button class="mob-nav-btn active" id="mnav-right" onclick="showMobilePanel('right')">
+    <span class="icon">📊</span>
+    <span class="label">結果</span>
+  </button>
+</div>
 
 <script>
 // ============================================================
@@ -2260,7 +2311,37 @@ function buildSliderTicks() {
   renderAll();
   buildSliderTicks();
   showDisclaimer();
+  showMobilePanel('right'); // mobile: default to results view
 })();
+
+// ============================================================
+//  Mobile panel toggle
+// ============================================================
+function showMobilePanel(which) {
+  if (window.innerWidth > 900) return; // desktop: both visible
+  const left  = document.getElementById('left-panel');
+  const right = document.querySelector('.right-panel');
+  const btnL  = document.getElementById('mnav-left');
+  const btnR  = document.getElementById('mnav-right');
+  if (which === 'left') {
+    left.classList.remove('mob-hidden');
+    right.classList.add('mob-hidden');
+    btnL.classList.add('active');
+    btnR.classList.remove('active');
+  } else {
+    left.classList.add('mob-hidden');
+    right.classList.remove('mob-hidden');
+    btnR.classList.add('active');
+    btnL.classList.remove('active');
+  }
+}
+// Restore both panels on resize to desktop
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 900) {
+    document.getElementById('left-panel').classList.remove('mob-hidden');
+    document.querySelector('.right-panel').classList.remove('mob-hidden');
+  }
+});
 
 // ============================================================
 //  免責事項モーダル

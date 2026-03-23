@@ -1,0 +1,16 @@
+{
+  "name": "耳鳴りトラッカー",
+  "short_name": "耳鳴りTracke",
+  "description": "耳鳴りの再現・記録・経過観察ツール（記録専用アプリ）",
+  "start_url": "./tinnitus-tracker.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a2550",
+  "theme_color": "#1a4a8a",
+  "orientation": "any",
+  "lang": "ja",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

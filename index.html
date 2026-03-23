@@ -1,0 +1,2295 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>耳鳴りトラッカー | Tinnitus Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a4a8a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="耳鳴トラッカ">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="description" content="耳鳴りの再現・記録・経過観察ツール（記録専用）">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
+  background: #eef2f7;
+  color: #2d3748;
+  min-height: 100vh;
+}
+header {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0a2550, #1a4a8a);
+  color: white;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  min-height: 72px;
+}
+#wave-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  opacity: 0.55;
+}
+header > *:not(#wave-canvas) { position: relative; z-index: 1; }
+header h1 { font-size: 1.3rem; font-weight: 700; }
+header p { font-size: 0.8rem; opacity: 0.85; margin-top: 3px; }
+.badge {
+  background: rgba(255,255,255,0.2);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 14px;
+  padding: 14px;
+}
+
+.panel {
+  background: white;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+}
+
+.section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #718096;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e8edf5;
+}
+
+/* Waveform buttons */
+.wavecat-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 8px 0 4px;
+}
+.type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-bottom: 4px;
+}
+.type-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  margin-bottom: 4px;
+}
+.type-btn {
+  padding: 7px 4px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  text-align: center;
+  background: white;
+  transition: all 0.18s;
+  color: #4a5568;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.type-btn:hover { border-color: #90cdf4; background: #ebf8ff; }
+.type-btn.active { border-color: #3182ce; background: #ebf8ff; color: #2b6cb0; font-weight: 700; }
+/* Extra controls shown conditionally */
+.extra-ctrl {
+  background: #f7fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 10px 12px;
+  margin: 8px 0 4px;
+  font-size: 0.8rem;
+}
+.extra-ctrl label { font-size: 0.75rem; font-weight: 700; color: #4a5568; display: block; margin-bottom: 5px; }
+.extra-ctrl-row { display: flex; align-items: center; gap: 10px; }
+.extra-ctrl-row input[type="range"] { flex: 1; }
+.extra-ctrl-val { font-size: 1.1rem; font-weight: 800; color: #805ad5; min-width: 42px; text-align: right; }
+
+/* Sliders */
+.slider-group { margin-bottom: 14px; }
+.slider-label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.slider-label span { font-size: 0.82rem; font-weight: 600; color: #4a5568; }
+.slider-value { font-size: 1.4rem; font-weight: 800; color: #2b6cb0; }
+.slider-unit { font-size: 0.8rem; font-weight: 400; color: #a0aec0; }
+input[type="range"] { width: 100%; accent-color: #3182ce; cursor: pointer; height: 20px; }
+
+
+/* NRS */
+.nrs-value { font-size: 2.4rem; font-weight: 900; text-align: center; margin: 6px 0 4px; transition: color 0.3s; }
+.nrs-bar { height: 10px; border-radius: 5px; background: linear-gradient(to right, #4299e1, #9f7aea, #f6ad55, #e53e3e); margin-bottom: 4px; }
+.nrs-ticks { display: flex; justify-content: space-between; font-size: 0.65rem; color: #a0aec0; }
+
+/* Main play button */
+.btn-play {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1.05rem;
+  font-weight: 700;
+  transition: all 0.18s;
+  margin-bottom: 6px;
+  font-family: inherit;
+}
+.btn-play.stopped { background: #48bb78; color: white; }
+.btn-play.stopped:hover { background: #38a169; }
+.btn-play.playing { background: #e53e3e; color: white; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.85} }
+
+/* Form fields */
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 0.8rem; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 7px;
+  font-size: 0.88rem;
+  background: #f7fafc;
+  font-family: inherit;
+  color: #2d3748;
+  transition: border-color 0.15s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  outline: none; border-color: #3182ce; background: white;
+}
+.form-group textarea { resize: vertical; min-height: 56px; }
+
+.btn-save {
+  width: 100%;
+  padding: 13px;
+  background: #3182ce;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 700;
+  transition: all 0.18s;
+  font-family: inherit;
+  margin-top: 4px;
+}
+.btn-save:hover { background: #2b6cb0; }
+.btn-save.saved { background: #48bb78; }
+.divider { border: none; border-top: 2px solid #e8edf5; margin: 16px 0; }
+.patient-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.patient-row input {
+  flex: 1; padding: 8px 11px;
+  border: 1.5px solid #e2e8f0; border-radius: 7px;
+  font-size: 0.88rem; background: #f7fafc; font-family: inherit; color: #2d3748;
+}
+.freq-note { font-size: 0.7rem; color: #4299e1; margin-top: 3px; text-align: center; font-weight: 600; }
+
+/* ===== RIGHT PANEL TABS ===== */
+.right-panel { display: flex; flex-direction: column; gap: 14px; }
+
+.tab-nav {
+  display: flex;
+  gap: 4px;
+  background: #e8edf5;
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.tab-btn {
+  flex: 1;
+  padding: 10px 8px;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: transparent;
+  color: #718096;
+  transition: all 0.18s;
+  font-family: inherit;
+}
+.tab-btn:hover { color: #4a5568; }
+.tab-btn.active { background: white; color: #2b6cb0; box-shadow: 0 1px 5px rgba(0,0,0,0.12); }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Chart */
+#chart3d { height: 480px; }
+.empty-chart {
+  height: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #a0aec0;
+  font-size: 0.9rem;
+  gap: 10px;
+}
+.empty-chart .icon { font-size: 3rem; }
+
+/* Export row */
+.export-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.btn-export {
+  padding: 8px 16px; border: none; border-radius: 7px;
+  cursor: pointer; font-size: 0.82rem; font-weight: 600;
+  transition: opacity 0.15s; font-family: inherit;
+}
+.btn-export:hover { opacity: 0.88; }
+.btn-csv { background: #48bb78; color: white; }
+.btn-json { background: #805ad5; color: white; }
+.btn-print { background: #4a5568; color: white; }
+.btn-clear { background: #fc8181; color: white; }
+.record-count { margin-left: auto; font-size: 0.8rem; color: #718096; font-weight: 600; }
+
+/* History table */
+.table-wrap { overflow-x: auto; max-height: 400px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+thead { position: sticky; top: 0; z-index: 1; }
+th { padding: 9px 12px; text-align: left; font-weight: 700; color: #4a5568; border-bottom: 2px solid #e2e8f0; background: #f7fafc; white-space: nowrap; }
+td { padding: 8px 12px; border-bottom: 1px solid #f0f4f8; vertical-align: middle; }
+tr:hover td { background: #f7fafc; }
+.nrs-badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-weight: 800; color: white; font-size: 0.8rem; min-width: 32px; text-align: center; }
+.pm-badge { background: #ebf8ff; color: #2b6cb0; font-size: 0.7rem; padding: 1px 6px; border-radius: 10px; font-weight: 600; margin-left: 4px; }
+.btn-del { padding: 3px 9px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.75rem; background: #fed7d7; color: #c53030; font-family: inherit; font-weight: 600; }
+.btn-del:hover { background: #fc8181; color: white; }
+.btn-replay { padding: 3px 9px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.75rem; background: #bee3f8; color: #2b6cb0; font-family: inherit; font-weight: 600; margin-right: 4px; }
+.btn-replay:hover { background: #90cdf4; }
+
+/* ===== PITCH MATCH TEST ===== */
+.pm-mode-nav {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+.pm-mode-btn {
+  flex: 1;
+  padding: 9px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: white;
+  color: #718096;
+  transition: all 0.18s;
+  font-family: inherit;
+  text-align: center;
+}
+.pm-mode-btn.active { border-color: #3182ce; background: #ebf8ff; color: #2b6cb0; }
+
+.pm-intro {
+  background: #f0f9ff;
+  border: 1px solid #bee3f8;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  font-size: 0.85rem;
+  color: #2c5282;
+  line-height: 1.7;
+}
+.pm-intro ol { padding-left: 18px; margin-top: 6px; }
+
+/* Guided mode */
+.pm-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  font-size: 0.78rem;
+  color: #718096;
+}
+.pm-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.pm-progress-fill {
+  height: 100%;
+  background: linear-gradient(to right, #4299e1, #9f7aea);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.pm-tone-box {
+  text-align: center;
+  background: #f7fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+.pm-tone-label { font-size: 0.75rem; color: #718096; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.pm-tone-freq { font-size: 2.4rem; font-weight: 900; color: #2b6cb0; margin: 6px 0; }
+.pm-tone-btn {
+  display: inline-block;
+  padding: 9px 28px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-family: inherit;
+  transition: all 0.18s;
+  margin-top: 6px;
+}
+.pm-tone-btn.play { background: #4299e1; color: white; }
+.pm-tone-btn.play:hover { background: #3182ce; }
+.pm-tone-btn.stop { background: #e53e3e; color: white; animation: pulse 1.2s infinite; }
+.pm-tone-btn.playing-indicator { background: #48bb78; color: white; }
+
+.pm-question { text-align: center; font-size: 0.95rem; color: #4a5568; font-weight: 600; margin-bottom: 12px; }
+
+.pm-answer-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.pm-answer-btn {
+  padding: 14px 10px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-family: inherit;
+  transition: all 0.18s;
+}
+.pm-answer-btn:hover { transform: scale(1.03); }
+.pm-lower { background: #bee3f8; color: #2c5282; }
+.pm-lower:hover { background: #90cdf4; }
+.pm-match { background: #48bb78; color: white; padding: 14px 18px; }
+.pm-match:hover { background: #38a169; }
+.pm-higher { background: #fbd38d; color: #744210; }
+.pm-higher:hover { background: #f6ad55; }
+
+.pm-sub-row { display: flex; gap: 8px; justify-content: center; }
+.pm-sub-btn {
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: #718096;
+  background: white;
+  font-family: inherit;
+}
+.pm-sub-btn:hover { border-color: #a0aec0; color: #4a5568; }
+
+/* Pitch match result */
+.pm-result-box {
+  text-align: center;
+  background: linear-gradient(135deg, #ebf8ff, #e9d8fd);
+  border: 2px solid #bee3f8;
+  border-radius: 14px;
+  padding: 24px 20px;
+  margin-bottom: 16px;
+}
+.pm-result-label { font-size: 0.8rem; color: #553c9a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.pm-result-freq { font-size: 3rem; font-weight: 900; color: #2b6cb0; margin: 8px 0 4px; }
+.pm-result-steps { font-size: 0.78rem; color: #718096; margin-bottom: 14px; }
+.pm-save-btn {
+  width: 100%;
+  padding: 13px;
+  background: #3182ce;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+  transition: background 0.18s;
+  margin-bottom: 8px;
+}
+.pm-save-btn:hover { background: #2b6cb0; }
+.pm-save-btn.saved { background: #48bb78; }
+.pm-restart-btn {
+  width: 100%;
+  padding: 10px;
+  background: white;
+  color: #718096;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+}
+.pm-restart-btn:hover { border-color: #a0aec0; color: #4a5568; }
+
+/* Start button */
+.pm-start-btn {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #3182ce, #805ad5);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  font-weight: 800;
+  font-family: inherit;
+  transition: opacity 0.18s;
+  letter-spacing: 0.02em;
+}
+.pm-start-btn:hover { opacity: 0.9; }
+
+/* Free mode */
+.pm-semitone-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin: 10px 0;
+}
+.pm-st-btn {
+  padding: 9px 6px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: inherit;
+  background: white;
+  color: #4a5568;
+  text-align: center;
+  transition: all 0.15s;
+}
+.pm-st-btn:hover { border-color: #3182ce; color: #2b6cb0; background: #ebf8ff; }
+.pm-st-btn.up { border-color: #fbd38d; color: #744210; }
+.pm-st-btn.down { border-color: #bee3f8; color: #2c5282; }
+
+.pm-compare-box {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 14px 0;
+}
+.pm-compare-card {
+  background: #f7fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+}
+.pm-compare-card.ref { border-color: #48bb78; background: #f0fff4; }
+.pm-compare-card.test { border-color: #4299e1; background: #ebf8ff; }
+.pm-compare-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.pm-compare-card.ref .pm-compare-title { color: #276749; }
+.pm-compare-card.test .pm-compare-title { color: #2b6cb0; }
+.pm-compare-freq { font-size: 1.3rem; font-weight: 900; }
+.pm-compare-card.ref .pm-compare-freq { color: #276749; }
+.pm-compare-card.test .pm-compare-freq { color: #2b6cb0; }
+.pm-compare-btn {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 7px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.pm-compare-card.ref .pm-compare-btn { background: #c6f6d5; color: #276749; }
+.pm-compare-card.ref .pm-compare-btn:hover { background: #9ae6b4; }
+.pm-compare-card.test .pm-compare-btn { background: #bee3f8; color: #2c5282; }
+.pm-compare-card.test .pm-compare-btn:hover { background: #90cdf4; }
+.pm-compare-btn.playing { animation: pulse 1.2s infinite; }
+.ref-playing { background: #48bb78 !important; color: white !important; }
+.test-playing { background: #3182ce !important; color: white !important; }
+
+.pm-diff-display {
+  text-align: center;
+  font-size: 0.82rem;
+  color: #718096;
+  margin: 8px 0;
+  min-height: 1.2em;
+}
+.pm-diff-display span { font-weight: 700; color: #553c9a; }
+
+/* Octave check */
+.pm-octave-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+.pm-oct-btn {
+  padding: 12px 6px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: inherit;
+  background: white;
+  color: #4a5568;
+  text-align: center;
+  line-height: 1.4;
+  transition: all 0.18s;
+}
+.pm-oct-btn:hover { border-color: #3182ce; background: #ebf8ff; color: #2b6cb0; }
+.pm-oct-btn.selected { border-color: #48bb78; background: #f0fff4; color: #276749; }
+
+/* ===== REPORT TAB ===== */
+.report-section { margin-bottom: 22px; }
+.report-sec-title {
+  font-size: 0.75rem; font-weight: 700; color: #718096;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 2px solid #e8edf5;
+}
+/* Summary cards */
+.summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+.summary-card { background: #f7fafc; border-radius: 10px; padding: 12px 8px; text-align: center; border: 1.5px solid #e2e8f0; }
+.summary-card-label { font-size: 0.68rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; }
+.summary-card-value { font-size: 1.5rem; font-weight: 900; color: #2b6cb0; margin: 4px 0 2px; line-height: 1; }
+.summary-card-sub { font-size: 0.68rem; color: #a0aec0; }
+/* Event form */
+.event-form-row { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+.event-form-row input[type="date"] { padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 7px; font-size: 0.83rem; font-family: inherit; background: #f7fafc; color: #2d3748; }
+.event-form-row input[type="text"] { flex: 1; min-width: 130px; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 7px; font-size: 0.83rem; font-family: inherit; background: #f7fafc; color: #2d3748; }
+.event-form-row select { padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 7px; font-size: 0.83rem; font-family: inherit; background: #f7fafc; cursor: pointer; color: #2d3748; }
+.btn-add-event { padding: 7px 16px; background: #3182ce; color: white; border: none; border-radius: 7px; cursor: pointer; font-size: 0.83rem; font-weight: 700; font-family: inherit; white-space: nowrap; }
+.btn-add-event:hover { background: #2b6cb0; }
+/* Event list */
+.event-list { max-height: 160px; overflow-y: auto; }
+.event-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 5px; background: #f7fafc; border-radius: 8px; border-left: 4px solid; }
+.event-item-date { font-size: 0.78rem; color: #718096; font-weight: 600; white-space: nowrap; }
+.event-item-label { flex: 1; font-size: 0.88rem; font-weight: 700; }
+.btn-del-event { padding: 3px 9px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.75rem; background: #fed7d7; color: #c53030; font-family: inherit; font-weight: 600; }
+.btn-del-event:hover { background: #fc8181; color: white; }
+/* Trend chart */
+#trend-chart { height: 300px; margin: 6px 0; }
+/* Comparison table */
+.report-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.report-table th { padding: 9px 12px; text-align: left; font-weight: 700; color: #4a5568; border-bottom: 2px solid #e2e8f0; background: #f7fafc; white-space: nowrap; }
+.report-table td { padding: 8px 12px; border-bottom: 1px solid #f0f4f8; vertical-align: middle; }
+.report-table .period-header td { background: #edf2f7; font-weight: 700; font-size: 0.8rem; color: #4a5568; border-top: 2px solid #cbd5e0; }
+.report-table .delta-row td { background: #f0fff4; font-size: 0.78rem; }
+.report-table .delta-row.worse td { background: #fff5f5; }
+.report-table .delta-row.neutral td { background: #f7fafc; }
+.delta-good { color: #276749; font-weight: 800; }
+.delta-bad  { color: #c53030; font-weight: 800; }
+.delta-neutral { color: #718096; font-weight: 700; }
+.period-empty { text-align: center; padding: 30px; color: #a0aec0; font-size: 0.88rem; }
+/* Multi-freq chips */
+.freq-chip-list { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 6px; min-height: 0; }
+.freq-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px; border-radius: 20px;
+  font-size: 0.72rem; font-weight: 700; color: white;
+  background: linear-gradient(135deg, #3182ce, #805ad5);
+}
+.freq-chip .chip-x {
+  cursor: pointer; font-size: 0.9rem; line-height: 1;
+  opacity: 0.8; padding: 0 1px;
+}
+.freq-chip .chip-x:hover { opacity: 1; }
+.btn-add-freq {
+  width: 100%; padding: 8px; margin-top: 4px;
+  border: 2px dashed #a0aec0; border-radius: 8px;
+  cursor: pointer; font-size: 0.82rem; font-weight: 600;
+  color: #718096; background: transparent; font-family: inherit;
+  transition: all 0.15s;
+}
+.btn-add-freq:hover { border-color: #3182ce; color: #3182ce; background: #ebf8ff; }
+
+@media print {
+  header { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .tab-nav, .pm-mode-nav, .pm-answer-row, .pm-sub-row,
+  .btn-play, .btn-save, .btn-export, .btn-del, .btn-replay, .export-row,
+  .event-form-row, .btn-add-event, .btn-del-event { display: none !important; }
+  .tab-content { display: block !important; }
+  #tab-pitch, #tab-history, #tab-report { margin-top: 20px; }
+  .panel { box-shadow: none; border: 1px solid #e2e8f0; }
+  #trend-chart { height: 250px; }
+  .summary-cards { grid-template-columns: repeat(4, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 免責事項モーダル ===== -->
+<div id="disclaimer-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:white; border-radius:16px; padding:28px 24px; max-width:480px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+    <div style="font-size:1.2rem; font-weight:800; color:#1a4a8a; margin-bottom:12px;">&#x26A0;&#xFE0F; ご利用前にお読みください</div>
+    <div style="font-size:0.85rem; color:#4a5568; line-height:1.8; margin-bottom:20px;">
+      <p>本アプリ「耳鳴りトラッカー」は、<strong>耳鳴りの状態を自己記録するための補助ツール</strong>です。</p>
+      <ul style="padding-left:16px; margin-top:10px;">
+        <li>医療診断・治療を行うものではありません</li>
+        <li>医師の判断に代わるものではありません</li>
+        <li>全てのデータはお使いのデバイスにのみ保存されます</li>
+        <li>症状が気になる場合は医療機関を受診してください</li>
+      </ul>
+    </div>
+    <label style="display:flex; align-items:center; gap:10px; font-size:0.85rem; color:#2d3748; margin-bottom:16px; cursor:pointer;">
+      <input type="checkbox" id="disclaimer-check" style="width:18px; height:18px; accent-color:#3182ce;"> 上記を理解し、記録ツールとして利用することに同意します
+    </label>
+    <button id="disclaimer-ok" onclick="acceptDisclaimer()" disabled
+      style="width:100%; padding:13px; background:#3182ce; color:white; border:none; border-radius:10px; font-size:1rem; font-weight:700; cursor:pointer; opacity:0.4; font-family:inherit; transition:opacity 0.2s;">
+      同意して始める
+    </button>
+    <div style="font-size:0.72rem; color:#a0aec0; text-align:center; margin-top:10px;">Tinnitus Tracker v2.0 — 記録専用ツール</div>
+  </div>
+</div>
+
+<header>
+  <canvas id="wave-canvas"></canvas>
+  <div>
+    <h1>耳鳴りトラッカー</h1>
+    <p>自分の耳鳴りを再現・記録し、医療者と共有する</p>
+  </div>
+  <div class="badge">Tinnitus Tracker v2.0</div>
+</header>
+<script>
+(function(){
+  var canvas = document.getElementById('wave-canvas');
+  var ctx = canvas.getContext('2d');
+  var t = 0;
+  function resize(){
+    canvas.width = canvas.offsetWidth * (window.devicePixelRatio||1);
+    canvas.height = canvas.offsetHeight * (window.devicePixelRatio||1);
+    ctx.scale(window.devicePixelRatio||1, window.devicePixelRatio||1);
+  }
+  window.addEventListener('resize', function(){ resize(); });
+  resize();
+
+  // Color stop from blue -> cyan -> green -> yellow -> orange -> red
+  var colorStops = [
+    {z:-1, r:30,  g:60, b:200},
+    {z:-0.5,r:0, g:180,b:220},
+    {z:0,  r:0,  g:200,b:100},
+    {z:0.5,r:255,g:210,b:0},
+    {z:1,  r:220,g:80, b:10}
+  ];
+  function zColor(z){
+    // z in [-1,1]
+    var stops = colorStops;
+    for(var i=0;i<stops.length-1;i++){
+      if(z<=stops[i+1].z){
+        var s=stops[i], e=stops[i+1];
+        var f=(z-s.z)/(e.z-s.z);
+        return [
+          Math.round(s.r+(e.r-s.r)*f),
+          Math.round(s.g+(e.g-s.g)*f),
+          Math.round(s.b+(e.b-s.b)*f)
+        ];
+      }
+    }
+    var l=stops[stops.length-1];
+    return [l.r,l.g,l.b];
+  }
+
+  function draw(){
+    var W = canvas.offsetWidth;
+    var H = canvas.offsetHeight;
+    ctx.clearRect(0,0,W,H);
+
+    var cols = 60, rows = 18;
+    // perspective projection parameters
+    var camX=W*0.1, camY=H*5.5, camZ=3.0;
+    var fov = 0.55;
+
+    // Precompute grid z values
+    var grid = [];
+    for(var r=0;r<=rows;r++){
+      grid[r]=[];
+      for(var c=0;c<=cols;c++){
+        var u = c/cols;
+        var v = r/rows;
+        // MATLAB peaks-like surface
+        var x = (u-0.5)*4;
+        var y = (v-0.5)*4;
+        var z = Math.sin(x*1.5 - t*1.2) * Math.cos(y*1.5 + t*0.7) * 0.7
+              + Math.sin(Math.sqrt(x*x+y*y)*1.8 - t*0.9) * 0.3;
+        grid[r][c] = z; // -1..1 approx
+      }
+    }
+
+    // Project 3D -> 2D (simple oblique / isometric-ish)
+    function project(c, r, z){
+      var u = c/cols;
+      var v = r/rows;
+      // map to screen space with skew for 3D feel
+      var sx = W*0.05 + u*W*0.85 + v*(W*0.06);
+      var sy = H*0.15 + v*H*0.55 - z*H*0.28 + u*(H*0.06);
+      return {x:sx, y:sy};
+    }
+
+    // Draw filled quads back-to-front
+    for(var r=rows-1;r>=0;r--){
+      for(var c=0;c<cols;c++){
+        var z00=grid[r][c], z10=grid[r][c+1], z01=grid[r+1][c], z11=grid[r+1][c+1];
+        var zAvg=(z00+z10+z01+z11)/4;
+        var rc=zColor(Math.max(-1,Math.min(1,zAvg)));
+        var p00=project(c,r,z00), p10=project(c+1,r,z10);
+        var p01=project(c,r+1,z01), p11=project(c+1,r+1,z11);
+
+        // Fill
+        ctx.beginPath();
+        ctx.moveTo(p00.x,p00.y);
+        ctx.lineTo(p10.x,p10.y);
+        ctx.lineTo(p11.x,p11.y);
+        ctx.lineTo(p01.x,p01.y);
+        ctx.closePath();
+        ctx.fillStyle='rgba('+rc[0]+','+rc[1]+','+rc[2]+',0.88)';
+        ctx.fill();
+        // Subtle edge
+        ctx.strokeStyle='rgba(0,0,0,0.1)';
+        ctx.lineWidth=0.4;
+        ctx.stroke();
+      }
+    }
+    t += 0.022;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+
+<div class="container">
+
+  <!-- ===== LEFT PANEL ===== -->
+  <div class="panel">
+
+    <div class="section-title">患者情報</div>
+    <div class="patient-row">
+      <input type="text" id="patientId" placeholder="患者ID / 氏名（任意）">
+    </div>
+
+    <div class="section-title">耳鳴り音の再現</div>
+
+    <div class="form-group">
+      <label>音の種類</label>
+
+      <div class="wavecat-label">純音系</div>
+      <div class="type-grid">
+        <button class="type-btn active" onclick="setSound('sine', this)">純音<br><small>sine</small></button>
+        <button class="type-btn" onclick="setSound('warble', this)">ワープル<br><small>FM変調</small></button>
+        <button class="type-btn" onclick="setSound('pulsatile', this)">拍動音<br><small>AM変調</small></button>
+      </div>
+
+      <div class="wavecat-label">倍音系</div>
+      <div class="type-grid">
+        <button class="type-btn" onclick="setSound('sawtooth', this)">のこぎり<br><small>sawtooth</small></button>
+        <button class="type-btn" onclick="setSound('square', this)">矩形波<br><small>square</small></button>
+        <button class="type-btn" onclick="setSound('triangle', this)">三角波<br><small>triangle</small></button>
+      </div>
+
+      <div class="wavecat-label">雑音系</div>
+      <div class="type-grid-4">
+        <button class="type-btn" onclick="setSound('white', this)">ホワイト<br><small>noise</small></button>
+        <button class="type-btn" onclick="setSound('pink', this)">ピンク<br><small>noise</small></button>
+        <button class="type-btn" onclick="setSound('brown', this)">ブラウン<br><small>noise</small></button>
+        <button class="type-btn" onclick="setSound('narrowband', this)">ナロー<br><small>バンド</small></button>
+      </div>
+
+      <!-- 拍動音専用: BPMスライダー -->
+      <div class="extra-ctrl" id="ctrl-pulsatile" style="display:none;">
+        <label>拍動の速さ（BPM） — 安静時心拍: 60〜80</label>
+        <div class="extra-ctrl-row">
+          <input type="range" id="bpmSlider" min="40" max="120" value="72" oninput="onBpmChange(this.value)">
+          <span class="extra-ctrl-val" id="bpmVal">72</span>
+        </div>
+      </div>
+
+      <!-- ナローバンド専用: 帯域幅スライダー -->
+      <div class="extra-ctrl" id="ctrl-narrowband" style="display:none;">
+        <label>帯域幅（狭い=純音に近い / 広い=ノイズに近い）</label>
+        <div class="extra-ctrl-row">
+          <input type="range" id="qSlider" min="2" max="50" value="15" oninput="onQChange(this.value)">
+          <span class="extra-ctrl-val" id="qVal">標準</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>周波数（Frequency）</span>
+        <div><span class="slider-value" id="freqVal">1000</span><span class="slider-unit" id="freqUnit">Hz</span></div>
+      </div>
+      <input type="range" id="freqSlider" min="0" max="1000" value="452" oninput="onFreqChange(this.value)">
+
+      <div class="freq-note" id="freqNote"></div>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-label">
+        <span>音量（Volume）</span>
+        <div><span class="slider-value" id="volVal">50</span><span class="slider-unit">/ 100</span></div>
+      </div>
+      <input type="range" id="volSlider" min="0" max="100" value="50" oninput="onVolChange(this.value)">
+
+    </div>
+
+    <div class="form-group">
+      <label>耳の選択</label>
+      <select id="earSelect">
+        <option value="両耳">両耳</option>
+        <option value="右耳">右耳 (R)</option>
+        <option value="左耳">左耳 (L)</option>
+      </select>
+    </div>
+
+    <button class="btn-play stopped" id="playBtn" onclick="toggleMainPlay()">▶ 再生して確認</button>
+
+    <!-- 複数周波数リスト -->
+    <div id="freq-chip-list" class="freq-chip-list"></div>
+    <button class="btn-add-freq" onclick="addPendingFreq()">＋ この音を記録リストに追加</button>
+    <div style="font-size:0.7rem; color:#a0aec0; text-align:center; margin-bottom:2px;" id="freq-list-hint">（複数の耳鳴り音がある場合、上のボタンで追加できます）</div>
+
+    <hr class="divider">
+    <div class="section-title">今日の記録</div>
+
+    <div class="slider-group">
+      <div class="slider-label"><span>つらさ（NRS）</span></div>
+      <div class="nrs-bar"></div>
+      <input type="range" id="nrsSlider" min="0" max="10" value="5" step="1" oninput="onNrsChange(this.value)" style="accent-color:#805ad5;">
+      <div class="nrs-value" id="nrsVal">5</div>
+      <div class="nrs-ticks">
+        <span>0<br>全くない</span>
+        <span style="text-align:center">5<br>中程度</span>
+        <span style="text-align:right">10<br>最大</span>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:12px;">
+      <label>記録日時</label>
+      <input type="datetime-local" id="recordDate">
+    </div>
+
+    <div class="form-group">
+      <label>メモ（症状・状況・環境）</label>
+      <textarea id="noteInput" placeholder="例：起床直後、ストレスあり、静かな部屋で悪化..."></textarea>
+    </div>
+
+    <button class="btn-save" id="saveBtn" onclick="saveRecord()">記録を保存する</button>
+  </div>
+
+  <!-- ===== RIGHT PANEL ===== -->
+  <div class="right-panel">
+    <div class="panel">
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="chart" onclick="showTab('chart')">📊 3D マップ</button>
+        <button class="tab-btn" data-tab="pitch" onclick="showTab('pitch')">🎵 ピッチマッチ</button>
+        <button class="tab-btn" data-tab="report" onclick="showTab('report')">📈 経過レポート</button>
+        <button class="tab-btn" data-tab="history" onclick="showTab('history')">📋 記録履歴</button>
+      </div>
+
+      <!-- ===== TAB: 3D CHART ===== -->
+      <div id="tab-chart" class="tab-content active">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div class="section-title" style="margin-bottom:0;">3D 耳鳴りマップ</div>
+          <div style="font-size:0.72rem; color:#a0aec0;">X: 周波数 | Y: 日付 | Z: 音量 | 色: NRS</div>
+        </div>
+        <div id="chart3d">
+          <div class="empty-chart">
+            <div class="icon">📊</div>
+            <div>記録がまだありません</div>
+            <div style="font-size:0.8rem;">左のパネルで耳鳴りを再現し、記録を追加してください</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TAB: PITCH MATCH TEST ===== -->
+      <div id="tab-pitch" class="tab-content">
+        <div class="section-title">ピッチマッチテスト</div>
+
+        <div class="pm-mode-nav">
+          <button class="pm-mode-btn active" onclick="showPMMode('guided')">ガイド式（自動絞り込み）</button>
+          <button class="pm-mode-btn" onclick="showPMMode('free')">自由調整式（手動比較）</button>
+        </div>
+
+        <!-- GUIDED MODE -->
+        <div id="pm-guided">
+          <div id="pm-guided-idle">
+            <div class="pm-intro">
+              <strong>耳鳴りのピッチ（高さ）を自動で絞り込みます</strong>
+              <ol>
+                <li>「テスト開始」を押すと基準音が鳴ります</li>
+                <li>あなたの耳鳴りと比べて「もっと低い」「一致」「もっと高い」を選んでください</li>
+                <li>7〜10ステップで自動収束し、ピッチが特定されます</li>
+              </ol>
+              <div style="margin-top:8px; font-size:0.8rem; color:#4299e1;">
+                ヒント：テスト前に左パネルで耳鳴りを再生・確認しておくと比較しやすいです
+              </div>
+            </div>
+            <button class="pm-start-btn" onclick="pmStartGuided()">テスト開始</button>
+          </div>
+
+          <div id="pm-guided-test" style="display:none;">
+            <div class="pm-progress-row">
+              <span id="pm-step-label">ステップ 1</span>
+              <div class="pm-progress-bar"><div class="pm-progress-fill" id="pm-progress-fill" style="width:5%"></div></div>
+              <span id="pm-range-label">範囲: 全域</span>
+            </div>
+
+            <div class="pm-tone-box">
+              <div class="pm-tone-label">基準音</div>
+              <div class="pm-tone-freq" id="pm-test-freq-display">—</div>
+              <button class="pm-tone-btn play" id="pm-play-btn" onclick="pmToggleTestTone()">▶ 聴く</button>
+            </div>
+
+            <div class="pm-question">耳鳴りと比べて、この音は？</div>
+            <div class="pm-answer-row">
+              <button class="pm-answer-btn pm-lower" onclick="pmAnswer('lower')">← もっと低い</button>
+              <button class="pm-answer-btn pm-match" onclick="pmAnswer('match')">一致！ ✓</button>
+              <button class="pm-answer-btn pm-higher" onclick="pmAnswer('higher')">もっと高い →</button>
+            </div>
+            <div class="pm-sub-row">
+              <button class="pm-sub-btn" id="pm-back-btn" onclick="pmBack()" style="display:none;">← 戻る</button>
+              <button class="pm-sub-btn" onclick="pmReset()">リセット</button>
+            </div>
+          </div>
+
+          <div id="pm-guided-octave" style="display:none;">
+            <div class="pm-result-box" style="margin-bottom:14px;">
+              <div class="pm-result-label">仮のピッチ</div>
+              <div class="pm-result-freq" id="pm-pre-result-freq">—</div>
+            </div>
+            <div class="pm-question">オクターブ確認：下の3つを聴いて、最も耳鳴りに近いものを選んでください</div>
+            <div class="pm-octave-grid" id="pm-octave-grid"></div>
+            <div class="pm-sub-row" style="margin-top:10px;">
+              <button class="pm-sub-btn" onclick="pmReset()">リセット</button>
+            </div>
+          </div>
+
+          <div id="pm-guided-result" style="display:none;">
+            <div class="pm-result-box">
+              <div class="pm-result-label">ピッチマッチ結果</div>
+              <div class="pm-result-freq" id="pm-result-freq-display">—</div>
+              <div class="pm-result-steps" id="pm-result-steps"></div>
+              <button class="pm-tone-btn play" id="pm-result-play-btn" onclick="pmToggleResultTone()" style="margin:0 auto; display:block;">▶ 結果音を聴く</button>
+            </div>
+            <button class="pm-save-btn" id="pm-save-btn" onclick="pmSaveGuided()">この結果を記録に保存する</button>
+            <button class="pm-restart-btn" onclick="pmReset()">もう一度テストする</button>
+          </div>
+        </div>
+
+        <!-- FREE MODE -->
+        <div id="pm-free" style="display:none;">
+          <div class="pm-intro">
+            <strong>スライダーで耳鳴りに近い音を探してください</strong><br>
+            参考音（左パネルの設定）とテスト音を聴き比べながら微調整できます。
+            半音単位のボタンで精密に合わせることができます。
+          </div>
+
+          <div class="pm-compare-box">
+            <div class="pm-compare-card ref">
+              <div class="pm-compare-title">参考音（左パネル）</div>
+              <div class="pm-compare-freq" id="pm-ref-display">—</div>
+              <button class="pm-compare-btn" id="pm-ref-btn" onclick="pmToggleRef()">▶ 参考音を再生</button>
+            </div>
+            <div class="pm-compare-card test">
+              <div class="pm-compare-title">テスト音</div>
+              <div class="pm-compare-freq" id="pm-free-freq-display">—</div>
+              <button class="pm-compare-btn" id="pm-free-btn" onclick="pmToggleFree()">▶ テスト音を再生</button>
+            </div>
+          </div>
+
+          <div class="pm-diff-display" id="pm-diff-display"></div>
+
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>テスト音の周波数</span>
+            </div>
+            <input type="range" id="pmFreeSlider" min="0" max="1000" value="452" oninput="pmFreeOnSlider(this.value)">
+
+          </div>
+
+          <div class="pm-semitone-grid">
+            <button class="pm-st-btn down" onclick="pmFreeSemitone(-2)">−2半音<br>◀◀</button>
+            <button class="pm-st-btn down" onclick="pmFreeSemitone(-1)">−1半音<br>◀</button>
+            <button class="pm-st-btn up" onclick="pmFreeSemitone(1)">+1半音<br>▶</button>
+            <button class="pm-st-btn up" onclick="pmFreeSemitone(2)">+2半音<br>▶▶</button>
+          </div>
+
+          <button class="pm-save-btn" id="pm-free-save-btn" onclick="pmSaveFree()">この音で記録する</button>
+        </div>
+      </div>
+
+      <!-- ===== TAB: REPORT ===== -->
+      <div id="tab-report" class="tab-content">
+
+        <!-- デモバナー -->
+        <div id="demo-banner" style="background:#ebf8ff;border:1.5px solid #bee3f8;border-radius:10px;padding:11px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <div>
+            <div style="font-size:0.82rem;font-weight:700;color:#2c5282;">プレゼン用サンプルデータ</div>
+            <div style="font-size:0.75rem;color:#4a90d9;margin-top:2px;">治療前 → TRT開始 → 補聴器装用の経過例を一括読み込み</div>
+          </div>
+          <button id="demo-btn" onclick="loadDemoData()" style="flex-shrink:0;padding:8px 18px;background:#2b6cb0;color:white;border:none;border-radius:8px;cursor:pointer;font-size:0.82rem;font-weight:700;font-family:inherit;white-space:nowrap;">サンプルを読み込む</button>
+        </div>
+
+        <!-- サマリーカード -->
+        <div id="report-summary-cards" class="summary-cards"></div>
+
+        <!-- 治療介入イベント管理 -->
+        <div class="report-section">
+          <div class="report-sec-title">治療介入の記録</div>
+          <div class="event-form-row">
+            <input type="date" id="eventDate">
+            <input type="text" id="eventLabel" placeholder="介入内容（例: TRT開始、補聴器装用）">
+            <select id="eventType">
+              <option value="#e53e3e">薬物療法</option>
+              <option value="#ed8936">補聴器 / TRT</option>
+              <option value="#3182ce">検査 / フォローアップ</option>
+              <option value="#48bb78">改善マーカー</option>
+              <option value="#805ad5">その他の治療</option>
+            </select>
+            <button class="btn-add-event" onclick="addEvent()">追加</button>
+          </div>
+          <div class="event-list" id="event-list">
+            <div class="period-empty">介入イベントがありません</div>
+          </div>
+        </div>
+
+        <!-- NRS・耳鳴り特性の推移グラフ -->
+        <div class="report-section">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div class="report-sec-title" style="margin-bottom:0;">推移グラフ</div>
+            <div style="display:flex; gap:6px;">
+              <label style="font-size:0.78rem; font-weight:600; color:#4a5568; cursor:pointer;">
+                <input type="checkbox" id="show-freq-overlay" onchange="renderTrendChart()" style="accent-color:#805ad5;"> 周波数
+              </label>
+              <label style="font-size:0.78rem; font-weight:600; color:#4a5568; cursor:pointer; margin-left:6px;">
+                <input type="checkbox" id="show-vol-overlay" onchange="renderTrendChart()" style="accent-color:#ed8936;"> 音量
+              </label>
+            </div>
+          </div>
+          <div id="trend-chart">
+            <div class="period-empty">記録がありません</div>
+          </div>
+        </div>
+
+        <!-- 介入前後比較表 -->
+        <div class="report-section">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div class="report-sec-title" style="margin-bottom:0;">介入前後の比較</div>
+            <button class="btn-export btn-print" onclick="window.print()" style="padding:6px 14px; font-size:0.78rem;">印刷 / PDF</button>
+          </div>
+          <div id="comparison-table"><div class="period-empty">記録がありません</div></div>
+        </div>
+
+      </div><!-- /#tab-report -->
+
+      <!-- ===== TAB: HISTORY ===== -->
+      <div id="tab-history" class="tab-content">
+        <div class="export-row">
+          <button class="btn-export btn-csv" onclick="exportCSV()">CSV出力</button>
+          <button class="btn-export btn-json" onclick="exportJSON()">JSON共有</button>
+          <button class="btn-export btn-print" onclick="window.print()">印刷</button>
+          <button class="btn-export btn-clear" onclick="clearAll()">全削除</button>
+          <span class="record-count" id="recordCount">0 件</span>
+        </div>
+        <div class="table-wrap" id="historyTable">
+          <div style="text-align:center; padding:30px; color:#a0aec0; font-size:0.88rem;">記録がありません</div>
+        </div>
+      </div>
+
+    </div><!-- /.panel -->
+  </div><!-- /.right-panel -->
+
+</div><!-- /.container -->
+
+<script>
+// ============================================================
+//  Utility: frequency ↔ log slider
+// ============================================================
+function sliderToFreq(v) {
+  const lo = Math.log2(125), hi = Math.log2(16000);
+  return Math.round(Math.pow(2, lo + (hi - lo) * v / 1000));
+}
+function freqToSlider(f) {
+  const lo = Math.log2(125), hi = Math.log2(16000);
+  return Math.round((Math.log2(Math.max(125, Math.min(16000, f))) - lo) / (hi - lo) * 1000);
+}
+function freqLabel(f) {
+  return f >= 1000 ? `${(f / 1000).toFixed(f % 1000 === 0 ? 0 : 2)} kHz` : `${f} Hz`;
+}
+function geoMean(a, b) { return Math.round(Math.sqrt(a * b)); }
+
+function nrsToColor(n) {
+  const t = n / 10;
+  return `rgb(${Math.round(66 + 163 * t)},${Math.round(153 - 153 * t)},${Math.round(225 - 225 * t)})`;
+}
+
+// ============================================================
+//  AudioContext
+// ============================================================
+let audioCtx = null;
+function getCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function makeOscillator(ctx, freq, type, vol) {
+  const g = ctx.createGain(); g.gain.value = vol / 100; g.connect(ctx.destination);
+  const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq;
+  o.connect(g); o.start();
+  return { osc: o, gain: g };
+}
+function makeWhiteNoiseBuf(ctx) {
+  const rate = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, rate * 3, rate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return buf;
+}
+function makeNoise(ctx, type, vol) {
+  const rate = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, rate * 3, rate);
+  const d = buf.getChannelData(0);
+  if (type === 'pink') {
+    let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+    for (let i=0;i<d.length;i++){const w=Math.random()*2-1;b0=.99886*b0+w*.0555179;b1=.99332*b1+w*.0750759;b2=.969*b2+w*.153852;b3=.8665*b3+w*.3104856;b4=.55*b4+w*.5329522;b5=-.7616*b5-w*.016898;d[i]=(b0+b1+b2+b3+b4+b5+b6+w*.5362)*.11;b6=w*.115926;}
+  } else {
+    for (let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  }
+  const g = ctx.createGain(); g.gain.value = vol / 100; g.connect(ctx.destination);
+  const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true;
+  s.connect(g); s.start();
+  return { osc: s, gain: g };
+}
+// ブラウンノイズ (Brownian / red noise) — 積分した白色雑音、低音が多い
+function makeBrown(ctx, vol) {
+  const rate = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, rate * 3, rate);
+  const d = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < d.length; i++) {
+    const w = Math.random() * 2 - 1;
+    d[i] = (last + 0.02 * w) / 1.02;
+    last = d[i];
+    d[i] *= 3.5; // 低音強調のため補正
+  }
+  const g = ctx.createGain(); g.gain.value = vol / 100; g.connect(ctx.destination);
+  const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true;
+  s.connect(g); s.start();
+  return { osc: s, gain: g };
+}
+// ナローバンドノイズ — 白色雑音をバンドパスフィルタで特定周波数帯に絞る
+function makeNarrowband(ctx, centerFreq, Q, vol) {
+  const g = ctx.createGain(); g.gain.value = (vol / 100) * 4; g.connect(ctx.destination);
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass'; filter.frequency.value = centerFreq; filter.Q.value = Q;
+  filter.connect(g);
+  const s = ctx.createBufferSource(); s.buffer = makeWhiteNoiseBuf(ctx); s.loop = true;
+  s.connect(filter); s.start();
+  return { osc: s, gain: g, filter, _narrowband: true };
+}
+// ワープルトーン — 周波数がゆっくり揺れる純音 (FM変調)
+function makeWarble(ctx, freq, vol) {
+  const g = ctx.createGain(); g.gain.value = vol / 100; g.connect(ctx.destination);
+  const osc = ctx.createOscillator(); osc.type = 'sine'; osc.frequency.value = freq; osc.connect(g);
+  const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 4; // 4Hz揺れ
+  const lfoG = ctx.createGain(); lfoG.gain.value = 50; // ±50セント揺れ幅
+  lfo.connect(lfoG); lfoG.connect(osc.detune);
+  osc.start(); lfo.start();
+  return { osc, gain: g, lfo, lfoG };
+}
+// 拍動音 — 心拍に合わせて音量が強弱する純音 (AM変調)
+function makePulsatile(ctx, freq, bpm, vol) {
+  const master = ctx.createGain(); master.gain.value = vol / 100; master.connect(ctx.destination);
+  const osc = ctx.createOscillator(); osc.type = 'sine'; osc.frequency.value = freq;
+  const amG = ctx.createGain(); amG.gain.value = 0;
+  osc.connect(amG); amG.connect(master);
+  // DC offset (0.5) + LFO sine (±0.5) → gainが 0〜1 で変化
+  const dc = ctx.createConstantSource(); dc.offset.value = 0.5; dc.connect(amG.gain);
+  const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = bpm / 60;
+  const lfoG = ctx.createGain(); lfoG.gain.value = 0.5;
+  lfo.connect(lfoG); lfoG.connect(amG.gain);
+  osc.start(); lfo.start(); dc.start();
+  return { osc, gain: master, lfo, lfoG, dc, amG };
+}
+function killNode(node) {
+  if (!node) return;
+  try {
+    node.osc.stop(); node.osc.disconnect();
+    if (node.lfo) { node.lfo.stop(); node.lfo.disconnect(); }
+    if (node.dc)  { node.dc.stop();  node.dc.disconnect();  }
+    if (node.lfoG)  node.lfoG.disconnect();
+    if (node.amG)   node.amG.disconnect();
+    if (node.filter) node.filter.disconnect();
+    node.gain.disconnect();
+  } catch(e) {}
+}
+
+// ============================================================
+//  Main tone (left panel)
+// ============================================================
+let mainNode = null;
+let mainPlaying = false;
+let currentFreqHz = 1000;
+let currentVol = 50;
+let currentWaveform = 'sine';
+const NOISE_TYPES = new Set(['white','pink','brown','narrowband']);
+let extraParams = { bpm: 72, narrowbandQ: 15 };
+
+// 音種ごとにノードを生成する統一ディスパッチャ
+function startSound(type) {
+  const ctx = getCtx();
+  switch (type) {
+    case 'sine': case 'sawtooth': case 'square': case 'triangle':
+      return makeOscillator(ctx, currentFreqHz, type, currentVol);
+    case 'warble':
+      return makeWarble(ctx, currentFreqHz, currentVol);
+    case 'pulsatile':
+      return makePulsatile(ctx, currentFreqHz, extraParams.bpm, currentVol);
+    case 'white':  return makeNoise(ctx, 'white', currentVol);
+    case 'pink':   return makeNoise(ctx, 'pink',  currentVol);
+    case 'brown':  return makeBrown(ctx, currentVol);
+    case 'narrowband': return makeNarrowband(ctx, currentFreqHz, extraParams.narrowbandQ, currentVol);
+  }
+}
+
+function onFreqChange(val) {
+  currentFreqHz = sliderToFreq(val);
+  const f = currentFreqHz;
+  document.getElementById('freqVal').textContent = f >= 1000 ? (f/1000).toFixed(f%1000===0?0:1) : f;
+  document.getElementById('freqUnit').textContent = f >= 1000 ? 'kHz' : 'Hz';
+  const notes = [[500,'低音域耳鳴り'],[2000,'中音域（会話音域）'],[8000,'高音域 — 最も多い耳鳴り域'],[99999,'超高音域耳鳴り']];
+  document.getElementById('freqNote').textContent = notes.find(([t])=>f<t)[1];
+  if (mainNode) {
+    // 純音系：オシレータ周波数を更新
+    if (mainNode.osc.frequency) mainNode.osc.frequency.setTargetAtTime(f, audioCtx.currentTime, 0.01);
+    // ナローバンド：フィルタ中心周波数を更新
+    if (mainNode.filter) mainNode.filter.frequency.setTargetAtTime(f, audioCtx.currentTime, 0.01);
+  }
+  pmFreeUpdateRef();
+}
+function onVolChange(val) {
+  currentVol = parseInt(val);
+  document.getElementById('volVal').textContent = currentVol;
+  if (mainNode) {
+    const boost = mainNode._narrowband ? 4 : 1;
+    mainNode.gain.gain.setTargetAtTime(currentVol / 100 * boost, audioCtx.currentTime, 0.01);
+  }
+}
+function onNrsChange(val) {
+  const n = parseInt(val);
+  const el = document.getElementById('nrsVal');
+  el.textContent = n; el.style.color = nrsToColor(n);
+}
+function onBpmChange(val) {
+  extraParams.bpm = parseInt(val);
+  document.getElementById('bpmVal').textContent = val;
+  if (mainPlaying && currentWaveform === 'pulsatile' && mainNode && mainNode.lfo) {
+    mainNode.lfo.frequency.setTargetAtTime(extraParams.bpm / 60, audioCtx.currentTime, 0.01);
+  }
+}
+function onQChange(val) {
+  extraParams.narrowbandQ = parseInt(val);
+  const label = val <= 5 ? '広め' : val <= 20 ? '標準' : '狭め';
+  document.getElementById('qVal').textContent = label;
+  if (mainPlaying && currentWaveform === 'narrowband' && mainNode && mainNode.filter) {
+    mainNode.filter.Q.setTargetAtTime(extraParams.narrowbandQ, audioCtx.currentTime, 0.01);
+  }
+}
+function updateExtraControls(type) {
+  document.getElementById('ctrl-pulsatile').style.display  = type === 'pulsatile'  ? 'block' : 'none';
+  document.getElementById('ctrl-narrowband').style.display = type === 'narrowband' ? 'block' : 'none';
+}
+function setSound(type, btn) {
+  currentWaveform = type;
+  document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  updateExtraControls(type);
+  if (mainPlaying) { killNode(mainNode); mainNode = startSound(type); }
+}
+// 旧関数は setSound に統合（後方互換）
+function setWaveform(type, btn) { setSound(type, btn); }
+function setNoise(type, btn)    { setSound(type, btn); }
+
+function toggleMainPlay() {
+  const btn = document.getElementById('playBtn');
+  if (mainPlaying) {
+    killNode(mainNode); mainNode = null; mainPlaying = false;
+    btn.textContent = '▶ 再生して確認'; btn.className = 'btn-play stopped';
+  } else {
+    mainNode = startSound(currentWaveform);
+    mainPlaying = true;
+    btn.textContent = '⏹ 停止'; btn.className = 'btn-play playing';
+  }
+}
+
+// ============================================================
+//  Data layer — multi-freq support
+// ============================================================
+const STORAGE_KEY = 'tinnitus_v1';
+
+// 旧データ（freq単体）を新形式（freqs配列）に正規化
+function normalizeRecord(r) {
+  if (r.freqs) return r; // 新形式
+  return {
+    ...r,
+    freqs: [{ freq: r.freq, vol: r.vol, waveform: r.waveform, ear: r.ear, isNoise: r.isNoise }]
+  };
+}
+function loadRecords() {
+  try { return (JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]')).map(normalizeRecord); }
+  catch { return []; }
+}
+function saveRecords(r) { localStorage.setItem(STORAGE_KEY, JSON.stringify(r)); }
+
+// pending freqs state
+let pendingFreqs = [];
+
+function addPendingFreq() {
+  pendingFreqs.push({
+    freq: currentFreqHz, vol: currentVol,
+    waveform: currentWaveform, ear: document.getElementById('earSelect').value,
+    isNoise: NOISE_TYPES.has(currentWaveform),
+    bpm: extraParams.bpm, narrowbandQ: extraParams.narrowbandQ
+  });
+  renderFreqChips();
+}
+function removePendingFreq(i) {
+  pendingFreqs.splice(i, 1);
+  renderFreqChips();
+}
+function renderFreqChips() {
+  const list = document.getElementById('freq-chip-list');
+  const hint = document.getElementById('freq-list-hint');
+  list.innerHTML = pendingFreqs.map((f, i) => `
+    <span class="freq-chip">
+      ${freqLabel(f.freq)} · ${f.waveform} · ${f.ear}
+      <span class="chip-x" onclick="removePendingFreq(${i})">✕</span>
+    </span>`).join('');
+  hint.style.display = pendingFreqs.length > 0 ? 'none' : 'block';
+}
+
+function saveRecord() {
+  const date = document.getElementById('recordDate').value;
+  if (!date) { alert('記録日時を選択してください'); return; }
+
+  // pendingFreqs が空の場合は現在設定をメインとして使う
+  const mainEntry = {
+    freq: currentFreqHz, vol: currentVol,
+    waveform: currentWaveform, ear: document.getElementById('earSelect').value,
+    isNoise: NOISE_TYPES.has(currentWaveform),
+    bpm: extraParams.bpm, narrowbandQ: extraParams.narrowbandQ
+  };
+  const freqs = pendingFreqs.length > 0 ? pendingFreqs : [mainEntry];
+
+  const rec = {
+    id: Date.now(),
+    patientId: document.getElementById('patientId').value.trim(),
+    date, freqs,
+    // primary freq for reports/sorting (always freqs[0])
+    freq: freqs[0].freq, vol: freqs[0].vol,
+    waveform: freqs[0].waveform, isNoise: freqs[0].isNoise,
+    nrs: parseInt(document.getElementById('nrsSlider').value),
+    ear: freqs[0].ear,
+    bpm: extraParams.bpm, narrowbandQ: extraParams.narrowbandQ,
+    note: document.getElementById('noteInput').value.trim(),
+    type: 'record'
+  };
+  const rs = loadRecords(); rs.push(rec); saveRecords(rs);
+  document.getElementById('noteInput').value = '';
+  pendingFreqs = [];
+  renderFreqChips();
+  const btn = document.getElementById('saveBtn');
+  btn.textContent = '保存しました！'; btn.classList.add('saved');
+  setTimeout(()=>{ btn.textContent='記録を保存する'; btn.classList.remove('saved'); }, 1600);
+  renderAll();
+}
+function deleteRecord(id) {
+  if (!confirm('この記録を削除しますか？')) return;
+  saveRecords(loadRecords().filter(r=>r.id!==id)); renderAll();
+}
+function replayRecord(r) {
+  const f0 = (r.freqs && r.freqs[0]) || r; // 後方互換
+  currentFreqHz = f0.freq; currentVol = f0.vol; currentWaveform = f0.waveform;
+  if (f0.bpm) extraParams.bpm = f0.bpm;
+  if (f0.narrowbandQ) extraParams.narrowbandQ = f0.narrowbandQ;
+  document.getElementById('freqSlider').value = freqToSlider(f0.freq);
+  onFreqChange(freqToSlider(f0.freq));
+  document.getElementById('volSlider').value = f0.vol; onVolChange(f0.vol);
+  document.getElementById('nrsSlider').value = r.nrs; onNrsChange(r.nrs);
+  document.getElementById('earSelect').value = f0.ear;
+  if (f0.bpm) { document.getElementById('bpmSlider').value = f0.bpm; document.getElementById('bpmVal').textContent = f0.bpm; }
+  if (f0.narrowbandQ) { document.getElementById('qSlider').value = f0.narrowbandQ; onQChange(f0.narrowbandQ); }
+  updateExtraControls(f0.waveform);
+  document.querySelectorAll('.type-btn').forEach(b => {
+    const small = b.querySelector('small');
+    b.classList.toggle('active', small && (small.textContent === f0.waveform || b.textContent.includes(f0.waveform)));
+  });
+  if (mainPlaying) { killNode(mainNode); mainNode = null; mainPlaying = false; }
+  mainNode = startSound(f0.waveform);
+  mainPlaying = true;
+  const btn = document.getElementById('playBtn');
+  btn.textContent = '⏹ 停止'; btn.className = 'btn-play playing';
+}
+function clearAll() {
+  if (!confirm('全ての記録を削除しますか？')) return;
+  localStorage.removeItem(STORAGE_KEY); renderAll();
+}
+
+// ============================================================
+//  Tabs
+// ============================================================
+function showTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active', c.id==='tab-'+name));
+  if (name === 'chart')  { const r = loadRecords(); if (r.length) renderChart(r); }
+  if (name === 'pitch')  pmFreeUpdateRef();
+  if (name === 'report') renderReport();
+}
+
+// ============================================================
+//  Init: イベント日付のデフォルトを今日に
+// ============================================================
+function initEventDate() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('eventDate').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+}
+
+// ============================================================
+//  PITCH MATCH — Guided (binary search)
+// ============================================================
+let pmState = { phase: 'idle', low:125, high:16000, current:null, step:0, history:[], result:null };
+let pmTestNode = null;
+let pmTestPlaying = false;
+
+function pmPlayAt(freq) {
+  killNode(pmTestNode);
+  pmTestNode = makeOscillator(getCtx(), freq, 'sine', currentVol || 50);
+  pmTestPlaying = true;
+}
+function pmStopTest() {
+  killNode(pmTestNode); pmTestNode = null; pmTestPlaying = false;
+}
+function pmToggleTestTone() {
+  if (pmTestPlaying) { pmStopTest(); } else { pmPlayAt(pmState.current); }
+  updatePMTestBtn();
+}
+function pmToggleResultTone() {
+  if (pmTestPlaying) { pmStopTest(); } else { pmPlayAt(pmState.result); }
+  const btn = document.getElementById('pm-result-play-btn');
+  if (btn) { btn.textContent = pmTestPlaying ? '⏹ 停止' : '▶ 結果音を聴く'; btn.className = 'pm-tone-btn '+(pmTestPlaying?'stop':'play'); }
+}
+function updatePMTestBtn() {
+  const btn = document.getElementById('pm-play-btn');
+  if (btn) { btn.textContent = pmTestPlaying ? '⏹ 停止' : '▶ 聴く'; btn.className = 'pm-tone-btn '+(pmTestPlaying?'stop':'play'); }
+}
+
+function pmStartGuided() {
+  pmStopTest();
+  pmState = { phase:'testing', low:125, high:16000, current:geoMean(125,16000), step:0, history:[], result:null };
+  showPMPhase('test');
+  pmPlayAt(pmState.current);
+  updatePMTestDisplay();
+}
+
+function pmAnswer(dir) {
+  if (pmState.phase !== 'testing') return;
+  pmState.history.push({ freq: pmState.current, answer: dir });
+  pmState.step++;
+
+  if (dir === 'match') {
+    pmState.result = pmState.current;
+    pmFinish();
+    return;
+  }
+  if (dir === 'higher') pmState.low = pmState.current;
+  else pmState.high = pmState.current;
+
+  pmState.current = geoMean(pmState.low, pmState.high);
+
+  const converged = pmState.high / pmState.low < 1.0595; // < 1 semitone
+  if (converged || pmState.step >= 13) {
+    pmState.result = pmState.current;
+    pmFinish();
+    return;
+  }
+  pmPlayAt(pmState.current);
+  updatePMTestDisplay();
+}
+
+function pmFinish() {
+  pmStopTest();
+  pmState.phase = 'octave';
+  showPMPhase('octave');
+  renderOctaveGrid(pmState.result);
+}
+
+function renderOctaveGrid(baseFreq) {
+  const el = document.getElementById('pm-pre-result-freq');
+  if (el) el.textContent = freqLabel(baseFreq);
+  const grid = document.getElementById('pm-octave-grid');
+  const candidates = [baseFreq / 2, baseFreq, baseFreq * 2].map(f => Math.round(Math.max(125, Math.min(16000, f))));
+  grid.innerHTML = candidates.map((f, i) => `
+    <button class="pm-oct-btn" onclick="pmOctaveSelect(${f}, this)">
+      ${i===0?'1オクターブ低い':i===2?'1オクターブ高い':'そのまま（同じ高さ）'}<br>
+      <strong>${freqLabel(f)}</strong>
+    </button>`).join('');
+  // Auto-play middle option
+  setTimeout(() => pmPlayAt(baseFreq), 300);
+}
+
+function pmOctaveSelect(freq, btn) {
+  document.querySelectorAll('.pm-oct-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  pmStopTest();
+  pmState.result = freq;
+  setTimeout(() => {
+    pmState.phase = 'done';
+    showPMPhase('result');
+    const el = document.getElementById('pm-result-freq-display');
+    if (el) el.textContent = freqLabel(freq);
+    const steps = document.getElementById('pm-result-steps');
+    if (steps) steps.textContent = `${pmState.step} ステップで収束`;
+  }, 200);
+}
+
+function pmBack() {
+  if (pmState.history.length === 0) return;
+  pmState.history.pop(); pmState.step--;
+  pmState.low=125; pmState.high=16000; pmState.current=geoMean(125,16000);
+  for (const h of pmState.history) {
+    if (h.answer==='higher') pmState.low=h.freq; else pmState.high=h.freq;
+    pmState.current=geoMean(pmState.low,pmState.high);
+  }
+  pmPlayAt(pmState.current);
+  updatePMTestDisplay();
+}
+
+function pmReset() {
+  pmStopTest();
+  pmState = { phase:'idle', low:125, high:16000, current:null, step:0, history:[], result:null };
+  showPMPhase('idle');
+}
+
+function showPMPhase(phase) {
+  document.getElementById('pm-guided-idle').style.display    = phase==='idle'   ?'block':'none';
+  document.getElementById('pm-guided-test').style.display    = phase==='test'   ?'block':'none';
+  document.getElementById('pm-guided-octave').style.display  = phase==='octave' ?'block':'none';
+  document.getElementById('pm-guided-result').style.display  = phase==='result' ?'block':'none';
+}
+
+function updatePMTestDisplay() {
+  const semitones = 12 * Math.log2(pmState.high / pmState.low);
+  document.getElementById('pm-step-label').textContent = `ステップ ${pmState.step + 1}`;
+  document.getElementById('pm-progress-fill').style.width = `${Math.min(pmState.step / 10 * 100, 95)}%`;
+  document.getElementById('pm-range-label').textContent = `絞り込み範囲: ${semitones.toFixed(1)} 半音`;
+  document.getElementById('pm-test-freq-display').textContent = freqLabel(pmState.current);
+  const backBtn = document.getElementById('pm-back-btn');
+  if (backBtn) backBtn.style.display = pmState.step > 0 ? 'inline-block' : 'none';
+  updatePMTestBtn();
+}
+
+function pmSaveGuided() {
+  if (!pmState.result) return;
+  _doSavePM(pmState.result, 'ガイド式ピッチマッチテスト');
+  const btn = document.getElementById('pm-save-btn');
+  btn.textContent = '保存しました！'; btn.classList.add('saved');
+  setTimeout(()=>{ btn.textContent='この結果を記録に保存する'; btn.classList.remove('saved'); }, 1600);
+}
+
+// ============================================================
+//  PITCH MATCH — Free mode
+// ============================================================
+let pmFreeFreq = 1000;
+let pmFreeNode = null;
+let pmFreePlaying = false;
+let pmRefNode = null;
+let pmRefPlaying = false;
+
+function pmFreeOnSlider(val) {
+  pmFreeFreq = sliderToFreq(val);
+  document.getElementById('pm-free-freq-display').textContent = freqLabel(pmFreeFreq);
+  if (pmFreePlaying && pmFreeNode) pmFreeNode.osc.frequency.setTargetAtTime(pmFreeFreq, audioCtx.currentTime, 0.01);
+  pmUpdateDiff();
+}
+function pmFreeSemitone(steps) {
+  pmFreeFreq = Math.round(Math.max(125, Math.min(16000, pmFreeFreq * Math.pow(2, steps / 12))));
+  document.getElementById('pmFreeSlider').value = freqToSlider(pmFreeFreq);
+  document.getElementById('pm-free-freq-display').textContent = freqLabel(pmFreeFreq);
+  if (pmFreePlaying && pmFreeNode) pmFreeNode.osc.frequency.setTargetAtTime(pmFreeFreq, audioCtx.currentTime, 0.01);
+  pmUpdateDiff();
+}
+function pmToggleFree() {
+  if (pmFreePlaying) { killNode(pmFreeNode); pmFreeNode=null; pmFreePlaying=false; }
+  else { pmFreeNode = makeOscillator(getCtx(), pmFreeFreq, 'sine', currentVol||50); pmFreePlaying=true; }
+  const btn = document.getElementById('pm-free-btn');
+  btn.textContent = pmFreePlaying ? '⏹ 停止' : '▶ テスト音を再生';
+  btn.className = 'pm-compare-btn' + (pmFreePlaying ? ' test-playing' : '');
+}
+function pmToggleRef() {
+  if (pmRefPlaying) { killNode(pmRefNode); pmRefNode=null; pmRefPlaying=false; }
+  else {
+    const isNoise = NOISE_TYPES.has(currentWaveform);
+    pmRefNode = isNoise ? makeNoise(getCtx(), currentWaveform, currentVol||50)
+                        : makeOscillator(getCtx(), currentFreqHz, currentWaveform, currentVol||50);
+    pmRefPlaying=true;
+  }
+  const btn = document.getElementById('pm-ref-btn');
+  btn.textContent = pmRefPlaying ? '⏹ 停止' : '▶ 参考音を再生';
+  btn.className = 'pm-compare-btn' + (pmRefPlaying ? ' ref-playing' : '');
+}
+function pmFreeUpdateRef() {
+  const el = document.getElementById('pm-ref-display');
+  if (el) el.textContent = freqLabel(currentFreqHz);
+  const freeEl = document.getElementById('pm-free-freq-display');
+  if (freeEl) freeEl.textContent = freqLabel(pmFreeFreq);
+  pmUpdateDiff();
+}
+function pmUpdateDiff() {
+  const el = document.getElementById('pm-diff-display');
+  if (!el) return;
+  const diff = pmFreeFreq - currentFreqHz;
+  const cents = Math.round(1200 * Math.log2(pmFreeFreq / currentFreqHz));
+  const sign = diff >= 0 ? '+' : '';
+  el.innerHTML = `参考音との差: <span>${sign}${diff} Hz / ${sign}${cents} セント</span>`;
+}
+function pmSaveFree() {
+  _doSavePM(pmFreeFreq, '自由調整式ピッチマッチテスト');
+  const btn = document.getElementById('pm-free-save-btn');
+  btn.textContent = '保存しました！'; btn.classList.add('saved');
+  setTimeout(()=>{ btn.textContent='この音で記録する'; btn.classList.remove('saved'); }, 1600);
+}
+
+function _doSavePM(freq, notePrefix) {
+  const date = document.getElementById('recordDate').value || new Date().toISOString().slice(0,16);
+  const rec = {
+    id: Date.now(),
+    patientId: document.getElementById('patientId').value.trim(),
+    date, freq, vol: currentVol,
+    nrs: parseInt(document.getElementById('nrsSlider').value),
+    ear: document.getElementById('earSelect').value,
+    waveform: 'sine', isNoise: false,
+    note: `[${notePrefix}] ${freqLabel(freq)}`,
+    type: 'pitch_match'
+  };
+  const rs = loadRecords(); rs.push(rec); saveRecords(rs);
+  renderAll();
+}
+
+function showPMMode(mode) {
+  document.getElementById('pm-guided').style.display = mode==='guided' ? 'block' : 'none';
+  document.getElementById('pm-free').style.display   = mode==='free'   ? 'block' : 'none';
+  document.querySelectorAll('.pm-mode-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.pm-mode-btn')[mode==='guided'?0:1].classList.add('active');
+  if (mode==='free') { pmFreeUpdateRef(); pmFreeFreq = currentFreqHz; document.getElementById('pmFreeSlider').value = freqToSlider(pmFreeFreq); pmFreeUpdateRef(); }
+}
+
+// ============================================================
+//  3D Chart
+// ============================================================
+function renderChart(records) {
+  const el = document.getElementById('chart3d');
+  if (!records.length) {
+    el.innerHTML='<div class="empty-chart"><div class="icon">📊</div><div>記録がまだありません</div><div style="font-size:0.8rem;">左のパネルで記録を追加してください</div></div>';
+    return;
+  }
+  el.innerHTML = '';
+  const isPM = r => r.type === 'pitch_match';
+
+  // freqs配列対応: 1レコードに複数の周波数エントリを展開
+  // 各周波数グループの代表点にラベルを付ける
+  function expandPoints(records, name, symbol) {
+    const xs=[], ys=[], zs=[], texts=[], colors=[], sizes=[];
+    // freq bucket → {x, y, z} of highest-Z point seen (for label placement)
+    const buckets = {};
+
+    records.forEach(r => {
+      const entries = r.freqs || [{ freq: r.freq, vol: r.vol, waveform: r.waveform, ear: r.ear }];
+      entries.forEach(f => {
+        xs.push(f.freq);
+        ys.push(r.date);
+        zs.push(f.vol);
+        sizes.push(7 + r.nrs * 0.8);
+        colors.push(r.nrs);
+        texts.push(`<b>${r.date.replace('T',' ')}</b><br>周波数: ${freqLabel(f.freq)}<br>音量: ${f.vol}<br>NRS: ${r.nrs}<br>耳: ${f.ear}<br>${r.note||''}`);
+        // Group by half-octave bucket for label deduplication
+        const bucket = Math.round(Math.log2(f.freq) * 2);
+        if (!buckets[bucket] || f.vol > buckets[bucket].z) {
+          buckets[bucket] = { x: f.freq, y: r.date, z: f.vol + 8 };
+        }
+      });
+    });
+
+    const markerTrace = {
+      type:'scatter3d', mode:'markers', name,
+      x:xs, y:ys, z:zs, hovertext:texts, hoverinfo:'text',
+      marker:{ size:sizes, color:colors,
+        colorscale:[[0,'#4299e1'],[0.3,'#9f7aea'],[0.6,'#f6ad55'],[1,'#e53e3e']],
+        colorbar:{ title:{text:'NRS',font:{size:11}}, tickvals:[0,5,10], thickness:12, len:0.6, x:1.02 },
+        cmin:0, cmax:10, opacity:0.88, symbol,
+        line:{width:1, color:'rgba(0,0,0,0.15)'}
+      }
+    };
+
+    // 周波数ラベルトレース（各グループの代表点に表示）
+    const bVals = Object.values(buckets);
+    const labelTrace = {
+      type:'scatter3d', mode:'text', name: name + ' (周波数)',
+      x: bVals.map(b=>b.x), y: bVals.map(b=>b.y), z: bVals.map(b=>b.z),
+      text: bVals.map(b=>freqLabel(b.x)),
+      textfont:{ size:11, color:'#2d3748', family:'Helvetica Neue, Arial, sans-serif' },
+      hoverinfo:'skip', showlegend:false
+    };
+
+    return [markerTrace, labelTrace];
+  }
+
+  const normal = records.filter(r=>!isPM(r));
+  const pm = records.filter(isPM);
+  const data = [];
+  if (normal.length) data.push(...expandPoints(normal,'記録','circle'));
+  if (pm.length) data.push(...expandPoints(pm,'ピッチマッチ','diamond'));
+  Plotly.newPlot(el, data, {
+    scene:{
+      xaxis:{ title:{text:'周波数 (Hz)',font:{size:11}}, type:'log',
+              range:[Math.log10(125), Math.log10(16000)],
+              autorange:false,
+              tickvals:[125,250,500,1000,2000,4000,8000,16000],
+              ticktext:['125','250','500','1k','2k','4k','8k','16k'] },
+      yaxis:{ title:{text:'日付',font:{size:11}}, type:'date' },
+      zaxis:{ title:{text:'音量',font:{size:11}}, range:[0,100] },
+      bgcolor:'#f8fafc',
+      camera:{ eye:{x:1.8,y:-1.4,z:0.8} }
+    },
+    margin:{l:0,r:0,t:10,b:0},
+    paper_bgcolor:'#f8fafc',
+    legend:{ x:0, y:1 },
+    font:{family:'Helvetica Neue, Arial, sans-serif'},
+  }, {responsive:true, displayModeBar:true});
+}
+
+
+// ============================================================
+//  History table
+// ============================================================
+function renderTable(records) {
+  document.getElementById('recordCount').textContent = `${records.length} 件`;
+  const el = document.getElementById('historyTable');
+  if (!records.length) { el.innerHTML='<div style="text-align:center;padding:30px;color:#a0aec0;font-size:.88rem;">記録がありません</div>'; return; }
+  const sorted = [...records].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  el.innerHTML = `<table>
+    <thead><tr><th>日時</th><th>周波数</th><th>音量</th><th>耳</th><th>波形</th><th>NRS</th><th>メモ</th><th></th></tr></thead>
+    <tbody>
+    ${sorted.map(r=>{
+      const freqsArr = r.freqs || [{ freq: r.freq, vol: r.vol, waveform: r.waveform, ear: r.ear }];
+      const freqsTxt = freqsArr.map(f => freqLabel(f.freq)).join(' / ');
+      const volsTxt  = freqsArr.map(f => f.vol).join(' / ');
+      return `<tr>
+        <td style="white-space:nowrap">${r.date.replace('T',' ')}${r.type==='pitch_match'?'<span class="pm-badge">PM</span>':''}</td>
+        <td style="white-space:nowrap">${freqsTxt}</td>
+        <td>${volsTxt}</td><td>${freqsArr[0].ear}</td>
+        <td style="font-size:.75rem;">${freqsArr[0].waveform}</td>
+        <td><span class="nrs-badge" style="background:${nrsToColor(r.nrs)}">${r.nrs}</span></td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.note||'-'}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn-replay" onclick='replayRecord(${JSON.stringify(r)})'>再現</button>
+          <button class="btn-del" onclick="deleteRecord(${r.id})">削除</button>
+        </td></tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+// ============================================================
+//  Export
+// ============================================================
+function exportCSV() {
+  const rs = loadRecords(); if (!rs.length){alert('記録がありません');return;}
+  const hdr = ['種別','患者ID','日時','周波数(Hz)','音量(0-100)','耳','波形','NRS(0-10)','メモ'];
+  const rows = [];
+  rs.forEach(r => {
+    const freqsArr = r.freqs || [{ freq: r.freq, vol: r.vol, waveform: r.waveform, ear: r.ear, isNoise: r.isNoise }];
+    freqsArr.forEach((f, i) => {
+      rows.push([r.type||'record',`"${r.patientId||''}"`,i===0?r.date:'',f.freq,f.vol,f.ear,f.waveform+(f.isNoise?'(noise)':''),i===0?r.nrs:'',i===0?`"${(r.note||'').replace(/"/g,'""')}"`:'' ]);
+    });
+  });
+  const csv='\uFEFF'+[hdr,...rows].map(r=>r.join(',')).join('\r\n');
+  dl(csv,`耳鳴り記録_${dstr()}.csv`,'text/csv;charset=utf-8');
+}
+function exportJSON() {
+  const rs = loadRecords(); if(!rs.length){alert('記録がありません');return;}
+  dl(JSON.stringify({exportedAt:new Date().toISOString(),app:'耳鳴りトラッカー v2.0',records:rs},null,2),`耳鳴り記録_${dstr()}.json`,'application/json');
+}
+function dl(content,name,mime){const b=new Blob([content],{type:mime});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+function dstr(){return new Date().toLocaleDateString('ja-JP').replace(/\//g,'-');}
+
+// ============================================================
+//  Report: Events (治療介入イベント)
+// ============================================================
+const EVENTS_KEY = 'tinnitus_events_v1';
+function loadEvents() { try { return JSON.parse(localStorage.getItem(EVENTS_KEY)||'[]'); } catch{return[];} }
+function saveEvents(e) { localStorage.setItem(EVENTS_KEY, JSON.stringify(e)); }
+
+function addEvent() {
+  const date = document.getElementById('eventDate').value;
+  const label = document.getElementById('eventLabel').value.trim();
+  const color = document.getElementById('eventType').value;
+  if (!date || !label) { alert('日付と介入内容を入力してください'); return; }
+  const evts = loadEvents();
+  evts.push({ id: Date.now(), date, label, color });
+  evts.sort((a, b) => a.date.localeCompare(b.date));
+  saveEvents(evts);
+  document.getElementById('eventLabel').value = '';
+  renderReport();
+}
+function deleteEvent(id) {
+  if (!confirm('この介入記録を削除しますか？')) return;
+  saveEvents(loadEvents().filter(e => e.id !== id));
+  renderReport();
+}
+
+// ============================================================
+//  Report: Summary cards
+// ============================================================
+function renderSummaryCards(records) {
+  const el = document.getElementById('report-summary-cards');
+  const main = records.filter(r => r.type !== 'pitch_match');
+  if (!main.length) { el.innerHTML = ''; return; }
+  const sorted = [...main].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const latest = sorted[sorted.length - 1];
+  const oldest = sorted[0];
+  const avgNRS = (main.reduce((s, r) => s + r.nrs, 0) / main.length).toFixed(1);
+  const days = Math.round((new Date(latest.date) - new Date(oldest.date)) / 86400000);
+  const latestNRS = latest.nrs;
+  // NRS trend: compare first half vs second half
+  const half = Math.floor(main.length / 2);
+  let trendHtml = '';
+  if (half >= 2) {
+    const first = main.slice(0, half).reduce((s, r) => s + r.nrs, 0) / half;
+    const second = main.slice(half).reduce((s, r) => s + r.nrs, 0) / (main.length - half);
+    const d = (second - first).toFixed(1);
+    trendHtml = d < 0 ? `<div class="summary-card-sub" style="color:#38a169;">NRS ${d} 改善傾向</div>`
+                      : d > 0 ? `<div class="summary-card-sub" style="color:#e53e3e;">NRS +${d} 悪化傾向</div>`
+                      : `<div class="summary-card-sub">NRS変化なし</div>`;
+  }
+  el.innerHTML = `
+    <div class="summary-card">
+      <div class="summary-card-label">最新 NRS</div>
+      <div class="summary-card-value" style="color:${nrsToColor(latestNRS)}">${latestNRS}</div>
+      <div class="summary-card-sub">${latest.date.slice(0,10)}</div>
+      ${trendHtml}
+    </div>
+    <div class="summary-card">
+      <div class="summary-card-label">平均 NRS</div>
+      <div class="summary-card-value">${avgNRS}</div>
+      <div class="summary-card-sub">${main.length} 件の平均</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-card-label">最新 周波数</div>
+      <div class="summary-card-value" style="font-size:1.2rem;">${freqLabel(latest.freq)}</div>
+      <div class="summary-card-sub">${latest.waveform}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-card-label">観察期間</div>
+      <div class="summary-card-value" style="font-size:1.2rem;">${days}</div>
+      <div class="summary-card-sub">日間 / ${main.length} 件</div>
+    </div>`;
+}
+
+// ============================================================
+//  Report: Trend chart (NRS + optional freq/vol overlay)
+// ============================================================
+function renderTrendChart() {
+  const records = loadRecords().filter(r => r.type !== 'pitch_match');
+  const events  = loadEvents();
+  const el = document.getElementById('trend-chart');
+
+  if (!records.length) {
+    el.innerHTML = '<div class="period-empty">記録がありません</div>';
+    return;
+  }
+  el.innerHTML = '';
+
+  const sorted = [...records].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const dates = sorted.map(r => r.date);
+  const nrsVals = sorted.map(r => r.nrs);
+  const freqVals = sorted.map(r => r.freq);
+  const volVals  = sorted.map(r => r.vol);
+
+  const showFreq = document.getElementById('show-freq-overlay')?.checked;
+  const showVol  = document.getElementById('show-vol-overlay')?.checked;
+
+  const data = [
+    {
+      type: 'scatter', mode: 'lines+markers', name: 'NRS（つらさ）',
+      x: dates, y: nrsVals, yaxis: 'y',
+      line: { color: '#3182ce', width: 2.5 },
+      marker: {
+        color: nrsVals,
+        colorscale: [[0,'#4299e1'],[0.4,'#9f7aea'],[0.7,'#f6ad55'],[1,'#e53e3e']],
+        cmin: 0, cmax: 10, size: 9, line: { width: 1.5, color: 'white' }
+      },
+      hovertemplate: '%{x|%Y-%m-%d}<br>NRS: <b>%{y}</b><extra></extra>'
+    }
+  ];
+  if (showFreq) {
+    data.push({
+      type: 'scatter', mode: 'markers', name: '周波数 (Hz)',
+      x: dates, y: freqVals, yaxis: 'y2',
+      marker: { color: '#805ad5', size: 8, symbol: 'diamond', opacity: 0.85, line:{width:1,color:'white'} },
+      hovertemplate: '%{x|%Y-%m-%d}<br>%{y} Hz<extra></extra>'
+    });
+  }
+  if (showVol) {
+    data.push({
+      type: 'scatter', mode: 'markers+lines', name: '音量',
+      x: dates, y: volVals, yaxis: 'y3',
+      line: { color: '#ed8936', width: 1.5, dash: 'dot' },
+      marker: { color: '#ed8936', size: 7, opacity: 0.8, line:{width:1,color:'white'} },
+      hovertemplate: '%{x|%Y-%m-%d}<br>音量: %{y}<extra></extra>'
+    });
+  }
+
+  // 介入ライン
+  const shapes = events.map(e => ({
+    type: 'line', xref: 'x', yref: 'paper',
+    x0: e.date, x1: e.date, y0: 0, y1: 1,
+    line: { color: e.color, width: 2, dash: 'dashdot' }
+  }));
+  const annotations = events.map(e => ({
+    xref: 'x', yref: 'paper', x: e.date, y: 1.02,
+    yanchor: 'bottom', xanchor: 'center',
+    text: `▼ ${e.label}`, showarrow: false,
+    font: { size: 9, color: e.color }, bgcolor: 'white',
+    bordercolor: e.color, borderwidth: 1, borderpad: 2
+  }));
+
+  const layout = {
+    xaxis: { type: 'date', title: { text: '日付', font:{size:11} }, tickformat: '%m/%d' },
+    yaxis: { title: { text: 'NRS', font:{size:11} }, range: [-0.3, 10.3], dtick: 2, gridcolor: '#e8edf5' },
+    yaxis2: showFreq ? { title:{text:'周波数(Hz)',font:{size:10}}, type:'log', overlaying:'y', side:'right', showgrid:false,
+      tickvals:[125,250,500,1000,2000,4000,8000,16000], ticktext:['125','250','500','1k','2k','4k','8k','16k'] } : undefined,
+    yaxis3: showVol ? { title:{text:'音量',font:{size:10}}, overlaying:'y', side:'right', anchor:'free', position:1, showgrid:false, range:[0,105] } : undefined,
+    shapes, annotations,
+    margin: { l: 50, r: showFreq||showVol ? 70 : 20, t: 50, b: 40 },
+    paper_bgcolor: '#f8fafc', plot_bgcolor: '#f8fafc',
+    legend: { orientation: 'h', y: -0.15, x: 0 },
+    hovermode: 'x unified',
+    font: { family: 'Helvetica Neue, Arial, sans-serif' }
+  };
+
+  Plotly.newPlot(el, data, layout, { responsive: true, displayModeBar: false });
+}
+
+// ============================================================
+//  Report: Comparison table (介入前後比較)
+// ============================================================
+function renderComparisonTable() {
+  const records = loadRecords().filter(r => r.type !== 'pitch_match');
+  const events  = loadEvents();
+  const el = document.getElementById('comparison-table');
+
+  if (!records.length) { el.innerHTML = '<div class="period-empty">記録がありません</div>'; return; }
+
+  const sorted = [...records].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // 期間を分割
+  function makePeriods() {
+    if (!events.length) return [{ label: '全期間', eventLabel: null, records: sorted }];
+    const ps = [];
+    const evtDates = events.map(e => e.date).sort();
+    // 介入前
+    const pre = sorted.filter(r => r.date.slice(0,10) < evtDates[0]);
+    if (pre.length) ps.push({ label: `介入前 (〜${evtDates[0]})`, eventLabel: null, records: pre });
+    // 各介入後
+    for (let i = 0; i < evtDates.length; i++) {
+      const start = evtDates[i];
+      const end   = evtDates[i + 1];
+      const evtObj = events.find(e => e.date === start);
+      const label = end ? `${evtObj?.label} (${start}〜${end})` : `${evtObj?.label} (${start}〜)`;
+      const recs = sorted.filter(r => r.date.slice(0,10) >= start && (!end || r.date.slice(0,10) < end));
+      ps.push({ label, eventLabel: evtObj?.label, color: evtObj?.color, records: recs });
+    }
+    return ps;
+  }
+
+  function stats(recs) {
+    if (!recs.length) return null;
+    const avg = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+    const nrs  = recs.map(r => r.nrs);
+    const freq = recs.map(r => r.freq);
+    const vol  = recs.map(r => r.vol);
+    const mn = avg(nrs);
+    const sd = Math.sqrt(avg(nrs.map(n => (n - mn) ** 2)));
+    return { count: recs.length, nrs: mn, nrsSD: sd, freq: avg(freq), vol: avg(vol) };
+  }
+
+  const periods = makePeriods();
+  let html = `<table class="report-table">
+    <thead><tr>
+      <th>期間</th><th>件数</th>
+      <th>平均NRS <small style="font-weight:400">(±SD)</small></th>
+      <th>平均周波数</th><th>平均音量</th>
+    </tr></thead><tbody>`;
+
+  let prevStats = null;
+  periods.forEach((p, i) => {
+    const s = stats(p.records);
+    // 期間ヘッダー行
+    const colorDot = p.color ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${p.color};margin-right:6px;vertical-align:middle;"></span>` : '';
+    html += `<tr class="period-header"><td colspan="5">${colorDot}${p.label}</td></tr>`;
+
+    if (!s) {
+      html += `<tr><td colspan="5" style="color:#a0aec0;font-size:0.8rem;padding-left:20px;">この期間の記録なし</td></tr>`;
+      return;
+    }
+
+    html += `<tr class="period-main">
+      <td style="padding-left:20px; font-size:0.8rem; color:#718096;">平均値</td>
+      <td><strong>${s.count}</strong></td>
+      <td><span class="nrs-badge" style="background:${nrsToColor(s.nrs)}">${s.nrs.toFixed(1)}</span> <small style="color:#a0aec0;">±${s.nrsSD.toFixed(1)}</small></td>
+      <td>${freqLabel(Math.round(s.freq))}</td>
+      <td>${s.vol.toFixed(1)}</td>
+    </tr>`;
+
+    // 前期との差分行
+    if (prevStats) {
+      const dNRS  = s.nrs  - prevStats.nrs;
+      const dFreq = s.freq - prevStats.freq;
+      const dVol  = s.vol  - prevStats.vol;
+      const nrsCls  = dNRS < -0.5 ? 'delta-good' : dNRS > 0.5 ? 'delta-bad' : 'delta-neutral';
+      const rowCls  = dNRS < -0.5 ? 'delta-row'  : dNRS > 0.5 ? 'delta-row worse' : 'delta-row neutral';
+      const arrow   = dNRS < -0.5 ? '▼ 改善' : dNRS > 0.5 ? '▲ 悪化' : '→ 変化なし';
+      const sign = n => n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1);
+      const signI = n => n >= 0 ? `+${Math.round(n)}` : `${Math.round(n)}`;
+      html += `<tr class="${rowCls}">
+        <td style="padding-left:20px; font-size:0.75rem; color:#718096;">前期との比較</td>
+        <td></td>
+        <td><span class="${nrsCls}">${sign(dNRS)} ${arrow}</span></td>
+        <td style="color:#555;">${signI(dFreq)} Hz</td>
+        <td style="color:#555;">${sign(dVol)}</td>
+      </tr>`;
+    }
+    prevStats = s;
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+// ============================================================
+//  Report: Event list render
+// ============================================================
+function renderEventList() {
+  const events = loadEvents();
+  const el = document.getElementById('event-list');
+  if (!events.length) {
+    el.innerHTML = '<div class="period-empty">介入イベントがありません</div>'; return;
+  }
+  el.innerHTML = events.map(e => `
+    <div class="event-item" style="border-color:${e.color};">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${e.color};flex-shrink:0;"></span>
+      <span class="event-item-date">${e.date}</span>
+      <span class="event-item-label">${e.label}</span>
+      <button class="btn-del-event" onclick="deleteEvent(${e.id})">削除</button>
+    </div>`).join('');
+}
+
+// ============================================================
+//  Demo data (プレゼン用サンプル)
+// ============================================================
+const DEMO_PATIENT = 'デモ患者 田中太郎 (56歳・男性)';
+
+const DEMO_RECORDS = [
+  // ── 治療前 (2025-10〜11/14) NRS高め ──
+  {date:'2025-10-05T09:00',freq:4000,vol:72,nrs:8,ear:'右耳',waveform:'sine',note:'朝から耳鳴りが強い。仕事中も気になって集中できない'},
+  {date:'2025-10-12T20:30',freq:3800,vol:75,nrs:7,ear:'右耳',waveform:'sine',note:'疲れた日は悪化する傾向がある'},
+  {date:'2025-10-19T08:15',freq:4200,vol:78,nrs:9,ear:'右耳',waveform:'sine',note:'今週最も強い。睡眠不足が続いている'},
+  {date:'2025-10-26T21:00',freq:4000,vol:70,nrs:8,ear:'右耳',waveform:'sine',note:'ストレスが多い週。静かな部屋でつらい'},
+  {date:'2025-11-02T09:30',freq:3900,vol:74,nrs:8,ear:'右耳',waveform:'sine',note:'静かな部屋では特につらさが増す'},
+  {date:'2025-11-09T19:45',freq:4100,vol:76,nrs:9,ear:'右耳',waveform:'sine',note:'音楽を聴くと少し楽になる'},
+  {date:'2025-11-14T08:00',freq:4000,vol:72,nrs:7,ear:'右耳',waveform:'sine',note:'TRT開始前最後の記録。医師に相談予定'},
+  // ── TRT開始後 (2025-11/15〜) 徐々に改善 ──
+  {date:'2025-11-22T21:00',freq:4000,vol:68,nrs:7,ear:'右耳',waveform:'sine',note:'TRT開始1週間。まだ大きな変化なし'},
+  {date:'2025-11-30T10:00',freq:4100,vol:65,nrs:6,ear:'右耳',waveform:'sine',note:'気にならない時間が少し増えてきた'},
+  {date:'2025-12-07T09:00',freq:3900,vol:63,nrs:6,ear:'右耳',waveform:'sine',note:'習慣化療法継続中。睡眠は改善傾向'},
+  {date:'2025-12-14T20:00',freq:4000,vol:60,nrs:5,ear:'右耳',waveform:'sine',note:'睡眠の質が改善してきた'},
+  {date:'2025-12-21T09:30',freq:4200,vol:58,nrs:6,ear:'右耳',waveform:'sine',note:'年末で疲れが出て少し悪化'},
+  {date:'2025-12-28T21:00',freq:4000,vol:55,nrs:5,ear:'右耳',waveform:'sine',note:'年末年始は比較的穏やか'},
+  // ── 補聴器装用後 (2026-01/10〜) さらに改善 ──
+  {date:'2026-01-17T09:00',freq:4000,vol:50,nrs:4,ear:'右耳',waveform:'sine',note:'補聴器1週間。環境音が入り耳鳴りが目立たなくなった'},
+  {date:'2026-01-25T20:30',freq:3800,vol:46,nrs:4,ear:'右耳',waveform:'sine',note:'補聴器に慣れてきた。会話も楽になった'},
+  {date:'2026-02-01T10:00',freq:4100,vol:44,nrs:3,ear:'右耳',waveform:'sine',note:'今月は比較的楽。仕事への影響が減少'},
+  {date:'2026-02-08T09:15',freq:4000,vol:42,nrs:4,ear:'右耳',waveform:'sine',note:'忙しい週でも以前ほどつらくない'},
+  {date:'2026-02-15T21:00',freq:3900,vol:40,nrs:3,ear:'右耳',waveform:'sine',note:'夜間の耳鳴りが明らかに減った'},
+  {date:'2026-02-22T09:30',freq:4200,vol:38,nrs:3,ear:'右耳',waveform:'sine',note:'音楽療法も併用開始'},
+  {date:'2026-03-01T10:00',freq:4000,vol:35,nrs:2,ear:'右耳',waveform:'sine',note:'気にならない日が増えてきた。QOL改善を実感'},
+  {date:'2026-03-08T20:00',freq:4100,vol:34,nrs:3,ear:'右耳',waveform:'sine',note:'天気が悪い日は少し強くなる傾向'},
+  {date:'2026-03-15T09:00',freq:4000,vol:32,nrs:2,ear:'右耳',waveform:'sine',note:'安定してきた。経過良好'},
+  {date:'2026-03-22T21:30',freq:3800,vol:30,nrs:2,ear:'右耳',waveform:'sine',note:'かなり改善。日常生活への影響がほぼなくなった'},
+].map((r, i) => ({
+  ...r, id: 900000 + i,
+  patientId: DEMO_PATIENT,
+  freqs: [{ freq: r.freq, vol: r.vol, waveform: r.waveform, ear: r.ear, isNoise: false }],
+  isNoise: false, bpm: 72, narrowbandQ: 15, type: 'record'
+}));
+
+const DEMO_EVENTS = [
+  { id: 990001, date: '2025-11-15', label: 'TRT（耳鳴り再訓練療法）開始', color: '#ed8936' },
+  { id: 990002, date: '2026-01-10', label: '補聴器装用開始',               color: '#3182ce' },
+];
+
+function loadDemoData() {
+  if (!confirm('サンプルデータを読み込みます。\n（既存データと混在します。クリア済みの場合はそのまま追加されます）')) return;
+
+  // 重複追加防止: デモIDが既にあればスキップ
+  const existRecs = loadRecords().filter(r => !DEMO_RECORDS.some(d => d.id === r.id));
+  const existEvts = loadEvents().filter(e => !DEMO_EVENTS.some(d => d.id === e.id));
+  saveRecords([...existRecs, ...DEMO_RECORDS]);
+  saveEvents([...existEvts, ...DEMO_EVENTS]);
+
+  document.getElementById('patientId').value = DEMO_PATIENT;
+
+  const btn = document.getElementById('demo-btn');
+  btn.textContent = '読み込み完了！';
+  btn.style.background = '#38a169';
+  setTimeout(() => { btn.textContent = 'サンプルを読み込む'; btn.style.background = '#2b6cb0'; }, 2500);
+
+  renderAll();
+  showTab('report');
+}
+
+// ============================================================
+//  Report: Main render
+// ============================================================
+function renderReport() {
+  const records = loadRecords();
+  renderSummaryCards(records);
+  renderEventList();
+  renderTrendChart();
+  renderComparisonTable();
+}
+
+// ============================================================
+//  Render all
+// ============================================================
+function renderAll() {
+  const rs = loadRecords();
+  if (document.getElementById('tab-chart').classList.contains('active'))  renderChart(rs);
+  if (document.getElementById('tab-report').classList.contains('active')) renderReport();
+  renderTable(rs);
+}
+
+// ============================================================
+//  Slider tick labels (built after layout so widths are known)
+// ============================================================
+function buildSliderTicks() {
+  const FREQ_VALS   = [125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+  const FREQ_LABELS = ['125','250','500','1k','2k','4k','8k','16kHz'];
+
+  function makeTick(label, leftPct, isFirst, isLast) {
+    const s = document.createElement('span');
+    s.textContent = label;
+    s.style.cssText = 'position:absolute; top:0; font-size:0.6rem; color:#a0aec0; white-space:nowrap; pointer-events:none;';
+    if (isFirst) {
+      s.style.left = '0';
+    } else if (isLast) {
+      s.style.right = '0';
+    } else {
+      s.style.left = leftPct + '%';
+      s.style.transform = 'translateX(-50%)';
+    }
+    return s;
+  }
+
+  function attachFreqTicks(sliderId) {
+    const slider = document.getElementById(sliderId);
+    if (!slider) return;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative; height:14px; margin-top:2px;';
+    FREQ_VALS.forEach((f, i) => {
+      const pct = freqToSlider(f) / 10; // 0..100
+      wrap.appendChild(makeTick(FREQ_LABELS[i], pct, i === 0, i === FREQ_VALS.length - 1));
+    });
+    slider.insertAdjacentElement('afterend', wrap);
+  }
+
+  function attachVolTicks(sliderId) {
+    const slider = document.getElementById(sliderId);
+    if (!slider) return;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative; height:14px; margin-top:2px;';
+    wrap.appendChild(makeTick('小さい', 0,   true,  false));
+    wrap.appendChild(makeTick('中程度', 50,  false, false));
+    wrap.appendChild(makeTick('大きい', 100, false, true));
+    slider.insertAdjacentElement('afterend', wrap);
+  }
+
+  attachFreqTicks('freqSlider');
+  attachFreqTicks('pmFreeSlider');
+  attachVolTicks('volSlider');
+}
+
+// ============================================================
+//  Init
+// ============================================================
+(function init() {
+  const now = new Date();
+  const pad = n=>String(n).padStart(2,'0');
+  document.getElementById('recordDate').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  onFreqChange(document.getElementById('freqSlider').value);
+  onVolChange(document.getElementById('volSlider').value);
+  onNrsChange(document.getElementById('nrsSlider').value);
+  showPMPhase('idle');
+  initEventDate();
+  renderAll();
+  buildSliderTicks();
+  showDisclaimer();
+})();
+
+// ============================================================
+//  免責事項モーダル
+// ============================================================
+function showDisclaimer() {
+  if (localStorage.getItem('disclaimer_accepted')) return;
+  const modal = document.getElementById('disclaimer-modal');
+  modal.style.display = 'flex';
+  document.getElementById('disclaimer-check').addEventListener('change', function() {
+    const btn = document.getElementById('disclaimer-ok');
+    btn.disabled = !this.checked;
+    btn.style.opacity = this.checked ? '1' : '0.4';
+  });
+}
+function acceptDisclaimer() {
+  localStorage.setItem('disclaimer_accepted', '1');
+  document.getElementById('disclaimer-modal').style.display = 'none';
+}
+
+// ============================================================
+//  Service Worker (PWA オフライン対応)
+// ============================================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('[SW] Registered'))
+      .catch(e => console.warn('[SW] Failed:', e));
+  });
+}
+</script>
+</body>
+</html>
